@@ -1,7 +1,7 @@
 package api_server
 
 import(
-	//"github.com/apsdehal/go-logger"
+
 	"github.com/gin-gonic/gin"
 
 	"go.etcd.io/etcd/clientv3"
