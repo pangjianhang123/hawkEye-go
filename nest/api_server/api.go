@@ -15,7 +15,13 @@ type JobMgr struct {
 }
 
 func SaveJob(ctx *gin.Context){
-
+	var (
+		err error
+		postJob string
+		job common.Job
+		oldJob *common.Job
+		bytes []byte
+	)
 }
 
 func AddJob(ctx *gin.Context){
@@ -27,5 +33,9 @@ func DeleteJob(ctx *gin.Context){
 }
 
 func KillJob(ctx *gin.Context){
+
+}
+
+func GetEyasList(ctx *gin.Context){
 
 }
