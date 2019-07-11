@@ -1,17 +1,19 @@
 package config
 
 import (
-	"io/ioutil"
 	"encoding/json"
+	"io/ioutil"
 )
 
 type Config struct {
-	EtcdEndpoints []string `json:"etcdEndpoints"`
-	EtcdDialTimeout int `json:"etcdDialTimeout"`
-	MongodbUri string `json:"mongodbUri"`
-	MongodbConnectTimeout int `json:"mongodbConnectTimeout"`
-	JobLogBatchSize int `json:"jobLogBatchSize"`
-	JobLogCommitTimeout int `json"jobLogCommitTimeout"`
+	EtcdEndpoints         []string `json:"etcdEndpoints"`
+	EtcdDialTimeout       int      `json:"etcdDialTimeout"`
+	MongodbUri            string   `json:"mongodbUri"`
+	MongodbConnectTimeout int      `json:"mongodbConnectTimeout"`
+	JobLogBatchSize       int      `json:"jobLogBatchSize"`
+	JobLogCommitTimeout   int      `json"jobLogCommitTimeout"`
+	MasterEndPoints       string   `json:"masterEndPoints"`
+	KeepAliveDuration     int      `json:""keepAliveDuration`
 }
 
 var (
@@ -23,7 +25,7 @@ var (
 func InitConfig(filename string) (err error) {
 	var (
 		content []byte
-		conf Config
+		conf    Config
 	)
 
 	// 1, 把配置文件读进来
