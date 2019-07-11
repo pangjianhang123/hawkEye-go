@@ -12,12 +12,15 @@ import (
 type Scheduler struct {
 	jobEventChan chan *module.JobEvent	//  etcd任务事件队列
 	jobPlanTable map[string]*module.JobSchedulePlan // 任务调度计划表
+	jobNormalPlanTable map[string] *module.JobNormalPlan// 普通脚本调度计划表
 	jobExecutingTable map[string]*module.JobExecuteInfo // 任务执行表
+	jobExecutingNormalTable map[string]*module.JobNormalExecuteInfo //普通任务执行列表
 	jobResultChan chan *module.JobExecuteResult	// 任务结果队列
+	jobNormalChan chan *module.JobNormalExecuteResult// 普通任务执行队列
 }
 
 var (
-	G_scheduler *Scheduler
+	forage_scheduler *Scheduler
 )
 
 // 处理任务事件
@@ -46,9 +49,35 @@ func (scheduler *Scheduler) handleJobEvent(jobEvent *module.JobEvent) {
 		}
 	}
 }
+//处理普通任务事件
+func (scheduler *Scheduler) handleNormalJobEvent(jobEvent *module.NormalJobEvent) {
+	var (
+		jobSchedulePlan *module.JobNormalPlan
+		jobExecuteInfo *module.JobExecuteInfo
+		jobExecuting bool
+		jobExisted bool
+		err error
+	)
+	switch jobEvent.EventType {
+	case module.JOB_EVENT_SAVE:	// 保存任务事件
+		if jobSchedulePlan, err = module.BuildjobNormalPlan(jobEvent.Job); err != nil {
+			return
+		}
+		scheduler.jobNormalPlanTable[jobEvent.Job.Name] = jobSchedulePlan
+	case module.JOB_EVENT_DELETE: // 删除任务事件
+		if jobSchedulePlan, jobExisted = scheduler.jobNormalPlanTable[jobEvent.Job.Name]; jobExisted {
+			delete(scheduler.jobPlanTable, jobEvent.Job.Name)
+		}
+	case module.JOB_EVENT_KILL: // 强杀任务事件
+		// 取消掉Command执行, 判断任务是否在执行中
+		if jobExecuteInfo, jobExecuting = scheduler.jobExecutingTable[jobEvent.Job.Name]; jobExecuting {
+			jobExecuteInfo.CancelFunc()	// 触发command杀死shell子进程, 任务得到退出
+		}
+	}
+}
 
 // 尝试执行任务
-func (scheduler *Scheduler) TryStartJob(jobPlan *module.JobSchedulePlan) {
+func (scheduler *Scheduler) TryStartScheduleJob(jobPlan *module.JobSchedulePlan) {
 	// 调度 和 执行 是2件事情
 	var (
 		jobExecuteInfo *module.JobExecuteInfo
@@ -74,6 +103,33 @@ func (scheduler *Scheduler) TryStartJob(jobPlan *module.JobSchedulePlan) {
 	G_executor.ExecuteJob(jobExecuteInfo)
 }
 
+// 尝试普通任务
+func (scheduler *Scheduler) TryStartNormalJob(jobPlan *module.JobNormalPlan) {
+	// 调度 和 执行 是2件事情
+	var (
+		jobExecuteInfo *module.JobNormalExecuteInfo
+		jobExecuting bool
+	)
+
+	// 执行的任务可能运行很久, 1分钟会调度60次，但是只能执行1次, 防止并发！
+
+	// 如果任务正在执行，跳过本次调度
+	if jobExecuteInfo, jobExecuting = scheduler.jobExecutingNormalTable[jobPlan.Job.Name]; jobExecuting {
+		log.Info("task ==>>>> still running")
+		return
+	}
+
+	// 构建执行状态信息
+	jobExecuteInfo = module.BuildNormalJobExecuteInfo(jobPlan)
+
+	// 保存执行状态
+	scheduler.jobExecutingNormalTable[jobPlan.Job.Name] = jobExecuteInfo
+
+	// 执行任务
+	log.Info("执行任务:"+ jobExecuteInfo.Job.Name+jobExecuteInfo.PlanTime.String()+ jobExecuteInfo.RealTime.String())
+	G_executor.ExecuteNormalJob(jobExecuteInfo)
+}
+
 // 重新计算任务调度状态
 func (scheduler *Scheduler) TrySchedule() (scheduleAfter time.Duration) {
 	var (
@@ -94,7 +150,7 @@ func (scheduler *Scheduler) TrySchedule() (scheduleAfter time.Duration) {
 	// 遍历所有任务
 	for _, jobPlan = range scheduler.jobPlanTable {
 		if jobPlan.NextTime.Before(now) || jobPlan.NextTime.Equal(now) {
-			scheduler.TryStartJob(jobPlan)
+			scheduler.TryStartScheduleJob(jobPlan)
 			jobPlan.NextTime = jobPlan.Expr.Next(now) // 更新下次执行时间
 		}
 
@@ -177,18 +233,22 @@ func (scheduler *Scheduler) PushJobEvent(jobEvent *module.JobEvent) {
 
 // 初始化调度器
 func InitScheduler() (err error) {
-	G_scheduler = &Scheduler{
+	forage_scheduler = &Scheduler{
 		jobEventChan: make(chan *module.JobEvent, 1000),
 		jobPlanTable: make(map[string]*module.JobSchedulePlan),
 		jobExecutingTable: make(map[string]*module.JobExecuteInfo),
 		jobResultChan: make(chan *module.JobExecuteResult, 1000),
 	}
 	// 启动调度协程
-	go G_scheduler.scheduleLoop()
+	go forage_scheduler.scheduleLoop()
 	return
 }
 
 // 回传任务执行结果
 func (scheduler *Scheduler) PushJobResult(jobResult *module.JobExecuteResult) {
 	scheduler.jobResultChan <- jobResult
+}
+//回传普通任务执行结果
+func (scheduler *Scheduler) PushNormalJobResult(jobResult *module.JobNormalExecuteResult) {
+	scheduler.jobNormalChan <- jobResult
 }

@@ -34,7 +34,6 @@ type LogSink struct {
 }
 
 var (
-	// 单例
 	G_logSink *LogSink
 )
 

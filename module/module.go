@@ -32,6 +32,10 @@ type JobSchedulePlan struct {
 	NextTime time.Time	// 下次调度时间
 }
 
+type JobNormalPlan struct{
+	Job *SimpleJob //调度任务信息
+	ScheduleTime time.Time
+}
 
 
 // 任务执行状态
@@ -43,6 +47,14 @@ type JobExecuteInfo struct {
 	CancelFunc context.CancelFunc//  用于取消command执行的cancel函数
 }
 
+// 普通任务执行状态
+type JobNormalExecuteInfo struct {
+	Job *SimpleJob // 任务信息
+	PlanTime time.Time // 理论上的调度时间
+	RealTime time.Time // 实际的调度时间
+	CancelCtx context.Context // 任务command的context
+	CancelFunc context.CancelFunc//  用于取消command执行的cancel函数
+}
 // HTTP接口应答
 type Response struct {
 	Errno int `json:"errno"`
@@ -50,15 +62,31 @@ type Response struct {
 	Data interface{} `json:"data"`
 }
 
-// 变化事件
+// schedule变化事件
 type JobEvent struct {
 	EventType int //  SAVE, DELETE
 	Job *ScheduleJob
 }
 
+// normal变化
+type NormalJobEvent struct{
+	EventType int //  SAVE, DELETE
+	Job *SimpleJob
+}
+
 // 任务执行结果
 type JobExecuteResult struct {
 	ExecuteInfo *JobExecuteInfo	// 执行状态
+	Output []byte // 脚本输出
+	Err error // 脚本错误原因
+	StartTime time.Time // 启动时间
+	EndTime time.Time // 结束时间
+}
+
+
+// 普通执行结果
+type JobNormalExecuteResult struct {
+	ExecuteInfo *JobNormalExecuteInfo	// 执行状态
 	Output []byte // 脚本输出
 	Err error // 脚本错误原因
 	StartTime time.Time // 启动时间
@@ -141,7 +169,7 @@ func BuildJobEvent(eventType int, job *ScheduleJob) (jobEvent *JobEvent) {
 	}
 }
 
-// 构造任务执行计划
+// 构造定时任务执行计划
 func BuildJobSchedulePlan(job *ScheduleJob) (jobSchedulePlan *JobSchedulePlan, err error) {
 	var (
 		expr *cronexpr.Expression
@@ -161,7 +189,25 @@ func BuildJobSchedulePlan(job *ScheduleJob) (jobSchedulePlan *JobSchedulePlan, e
 	return
 }
 
+//构造普通任务执行计划
+func BuildjobNormalPlan(job *SimpleJob)(jobNormalPlan *JobNormalPlan, err error){
+	jobNormalPlan = &JobNormalPlan{
+		Job: job,
+		ScheduleTime: (time.Now()),
+	}
+	return
+}
 // 构造执行状态信息
+func BuildNormalJobExecuteInfo(jobSchedulePlan *JobNormalPlan) (jobExecuteInfo *JobNormalExecuteInfo){
+	jobExecuteInfo = &JobNormalExecuteInfo{
+		Job: jobSchedulePlan.Job,
+		PlanTime: jobSchedulePlan.ScheduleTime, // 计算调度时间
+		RealTime: time.Now(), // 真实调度时间
+	}
+	jobExecuteInfo.CancelCtx, jobExecuteInfo.CancelFunc = context.WithCancel(context.TODO())
+	return
+}
+//
 func BuildJobExecuteInfo(jobSchedulePlan *JobSchedulePlan) (jobExecuteInfo *JobExecuteInfo){
 	jobExecuteInfo = &JobExecuteInfo{
 		Job: jobSchedulePlan.Job,

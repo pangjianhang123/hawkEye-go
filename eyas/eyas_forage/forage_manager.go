@@ -11,7 +11,7 @@ import (
 )
 
 // 任务管理器
-type JobMgr struct {
+type ForageManager struct {
 	client *clientv3.Client
 	kv clientv3.KV
 	lease clientv3.Lease
@@ -20,73 +20,117 @@ type JobMgr struct {
 
 var (
 	// 单例
-	G_jobMgr *JobMgr
+	forageMgr *ForageManager
 )
 
-// 监听任务变化
-func (jobMgr *JobMgr) watchJobs() (err error) {
+// 监听cron任务变化
+func (forageMgr *ForageManager) watchForageJobs() (err error) {
 	var (
-		getResp *clientv3.GetResponse
-		kvpair *mvccpb.KeyValue
+		etcdScheduleGetResponse *clientv3.GetResponse
+		etcdScheduleKvPair *mvccpb.KeyValue
+		watchChanSchedule clientv3.WatchChan
+
+		etcdNormalGetResponse *clientv3.GetResponse
+		etcdNormalKvPair *mvccpb.KeyValue
+		watchChanNormal  clientv3.WatchChan
+
 		job *module.ScheduleJob
 		watchStartRevision int64
-		watchChan clientv3.WatchChan
-		watchResp clientv3.WatchResponse
+
+
+		watchRespSchedule clientv3.WatchResponse
+		watchRespNormal clientv3.WatchResponse
 		watchEvent *clientv3.Event
 		jobName string
 		jobEvent *module.JobEvent
 	)
 
-	// 1, get一下/cron/jobs/目录下的所有任务，并且获知当前集群的revision
-	if getResp, err = jobMgr.kv.Get(context.TODO(), module.SCHE_JOB_SAVE_DIR, clientv3.WithPrefix()); err != nil {
+	//获取目前etcd中存储的所有的定时任务
+	if etcdScheduleGetResponse, err = forageMgr.kv.Get(context.TODO(), module.SCHE_JOB_SAVE_DIR, clientv3.WithPrefix()); err != nil {
+		return
+	}
+	//获取目前etcd中存储所有的普通任务
+	if etcdNormalGetResponse,err  =  forageMgr.kv.Get(context.TODO(), module.SIMP_JOB_SAVE_DIR, clientv3.WithPrefix()); err != nil {
 		return
 	}
 
-	// 当前有哪些任务
-	for _, kvpair = range getResp.Kvs {
-		// 反序列化json得到Job
-		if job, err = module.UnpackJob(kvpair.Value); err == nil {
+
+	// 当前有哪些定时任务
+	for _, etcdScheduleKvPair = range etcdScheduleGetResponse.Kvs {
+		//得到目前每一个定时任务
+		if job, err = module.UnpackJob(etcdScheduleKvPair.Value); err == nil {
 			jobEvent = module.BuildJobEvent(module.JOB_EVENT_SAVE, job)
 			// 同步给scheduler(调度协程)
-			G_scheduler.PushJobEvent(jobEvent)
+			forage_scheduler.PushJobEvent(jobEvent)
+		}
+	}
+	for _,etcdNormalKvPair =range etcdNormalGetResponse.Kvs{
+		//得到目前每一个普通任务
+		if job, err = module.UnpackJob(etcdNormalKvPair.Value); err == nil {
+			jobEvent = module.BuildJobEvent(module.JOB_EVENT_SAVE, job)
+			// 同步给scheduler(调度协程)
+			forage_scheduler.PushJobEvent(jobEvent)
 		}
 	}
 
 	// 2, 从该revision向后监听变化事件
-	go func() { // 监听协程
-		// 从GET时刻的后续版本开始监听变化
-		watchStartRevision = getResp.Header.Revision + 1
+	go func() {
+
+		watchStartRevision = etcdScheduleGetResponse.Header.Revision + 1
 		// 监听/cron/jobs/目录的后续变化
-		watchChan = jobMgr.watcher.Watch(context.TODO(), module.SCHE_JOB_SAVE_DIR, clientv3.WithRev(watchStartRevision), clientv3.WithPrefix())
+		watchChanSchedule = forageMgr.watcher.Watch(context.TODO(), module.SCHE_JOB_SAVE_DIR, clientv3.WithRev(watchStartRevision), clientv3.WithPrefix())
+		watchChanNormal = forageMgr.watcher.Watch(context.TODO(), module.SIMP_JOB_SAVE_DIR, clientv3.WithRev(watchStartRevision), clientv3.WithPrefix())
 		// 处理监听事件
-		for watchResp = range watchChan {
-			for _, watchEvent = range watchResp.Events {
+		for watchRespSchedule = range watchChanSchedule {
+			for _, watchEvent = range watchRespSchedule.Events {
 				switch watchEvent.Type {
-				case mvccpb.PUT: // 任务保存事件
+				case mvccpb.PUT: // 写入etcd动作
 					if job, err = module.UnpackJob(watchEvent.Kv.Value); err != nil {
 						continue
 					}
-					// 构建一个更新Event
+					//构建一个创建事件
 					jobEvent = module.BuildJobEvent(module.JOB_EVENT_SAVE, job)
-				case mvccpb.DELETE: // 任务被删除了
-					// Delete /cron/jobs/job10
+				case mvccpb.DELETE: // 删除etcd操作
+
 					jobName = module.ExtractJobName(string(watchEvent.Kv.Key))
 
 					job = &module.ScheduleJob{Name: jobName}
 
-					// 构建一个删除Event
+					//构建一个删除事件
 					jobEvent = module.BuildJobEvent(module.JOB_EVENT_DELETE, job)
 				}
 				// 变化推给scheduler
-				G_scheduler.PushJobEvent(jobEvent)
+				forage_scheduler.PushJobEvent(jobEvent)
+			}
+		}
+		for watchRespNormal = range watchChanSchedule {
+			for _, watchEvent = range watchRespNormal.Events {
+				switch watchEvent.Type {
+				case mvccpb.PUT: // 写入etcd动作
+					if job, err = module.UnpackJob(watchEvent.Kv.Value); err != nil {
+						continue
+					}
+					//构建一个创建事件
+					jobEvent = module.BuildJobEvent(module.JOB_EVENT_SAVE, job)
+				case mvccpb.DELETE: // 删除etcd操作
+
+					jobName = module.ExtractJobName(string(watchEvent.Kv.Key))
+
+					job = &module.ScheduleJob{Name: jobName}
+
+					//构建一个删除事件
+					jobEvent = module.BuildJobEvent(module.JOB_EVENT_DELETE, job)
+				}
+				// 变化推给scheduler
+				forage_scheduler.PushJobEvent(jobEvent)
 			}
 		}
 	}()
 	return
 }
 
-// 监听强杀任务通知
-func (jobMgr *JobMgr) watchKiller() {
+// 监听取消通知
+func (forageMgr *ForageManager) scheduleWatchKiller() {
 	var (
 		watchChan clientv3.WatchChan
 		watchResp clientv3.WatchResponse
@@ -95,10 +139,10 @@ func (jobMgr *JobMgr) watchKiller() {
 		jobName string
 		job *module.ScheduleJob
 	)
-	// 监听/cron/killer目录
+	//
 	go func() { // 监听协程
 		// 监听/cron/killer/目录的变化
-		watchChan = jobMgr.watcher.Watch(context.TODO(), module.JOB_KILLER_DIR, clientv3.WithPrefix())
+		watchChan = forageMgr.watcher.Watch(context.TODO(), module.JOB_KILLER_DIR, clientv3.WithPrefix())
 		// 处理监听事件
 		for watchResp = range watchChan {
 			for _, watchEvent = range watchResp.Events {
@@ -108,7 +152,7 @@ func (jobMgr *JobMgr) watchKiller() {
 					job = &module.ScheduleJob{Name: jobName}
 					jobEvent = module.BuildJobEvent(module.JOB_EVENT_KILL, job)
 					// 事件推给scheduler
-					G_scheduler.PushJobEvent(jobEvent)
+					forage_scheduler.PushJobEvent(jobEvent)
 				case mvccpb.DELETE: // killer标记过期, 被自动删除
 				}
 			}
@@ -143,7 +187,7 @@ func InitJobMgr() (err error) {
 	watcher = clientv3.NewWatcher(client)
 
 	// 赋值单例
-	G_jobMgr = &JobMgr{
+	forageMgr = &ForageManager{
 		client: client,
 		kv: kv,
 		lease: lease,
@@ -151,16 +195,16 @@ func InitJobMgr() (err error) {
 	}
 
 	// 启动任务监听
-	G_jobMgr.watchJobs()
+	forageMgr.watchForageJobs()
 
 	// 启动监听killer
-	G_jobMgr.watchKiller()
+	forageMgr.scheduleWatchKiller()
 
 	return
 }
 
 // 创建任务执行锁
-func (jobMgr *JobMgr) CreateJobLock(jobName string) (jobLock *JobLock){
-	jobLock = InitJobLock(jobName, jobMgr.kv, jobMgr.lease)
+func (forageMgr *ForageManager) CreateJobLock(jobName string) (jobLock *JobLock){
+	jobLock = InitJobLock(jobName, forageMgr.kv, forageMgr.lease)
 	return
 }
