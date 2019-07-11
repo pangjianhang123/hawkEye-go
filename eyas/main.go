@@ -1,15 +1,13 @@
 package main
 
 import (
-	"runtime"
-	"fmt"
 	"flag"
+	"fmt"
+	"runtime"
 	"time"
-
 
 	"github.com/ricky1122alonefe/hawkEye-go/eyas/config"
 	"github.com/ricky1122alonefe/hawkEye-go/eyas/eyas_forage"
-
 )
 
 var (
@@ -20,7 +18,7 @@ var (
 func initArgs() {
 	// worker -config ./worker.json
 	// worker -h
-	flag.StringVar(&confFile, "config", "./worker.json", "worker.json")
+	flag.StringVar(&confFile, "config", "./eyas.json", "eyas.json")
 	flag.Parse()
 }
 
