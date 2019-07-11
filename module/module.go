@@ -3,16 +3,26 @@ package module
 import (
 	"encoding/json"
 	"strings"
-	"github.com/gorhill/cronexpr"
 	"time"
 	"context"
+
+	"github.com/gorhill/cronexpr"
 )
 
-// 定时任务
+// 定时计划任务
 type ScheduleJob  struct {
-	Name string `json:"name"`	//  任务名
+	Name string `json:"name"`	//  任务名称
 	Command string	`json:"command"` // shell命令
 	CronExpr string	`json:"cronExpr"`	// cron表达式
+	EyasName string `json:"eyasName"`
+}
+
+//普通任务
+
+type SimpleJob struct{
+	Name string `json:"name"`	//  任务名称
+	Command string	`json:"command"` // shell命令
+	EyasName string `json:"eyasName"` //执行slave 信息
 }
 
 // 任务调度计划
@@ -21,6 +31,8 @@ type JobSchedulePlan struct {
 	Expr *cronexpr.Expression	// 解析好的cronexpr表达式
 	NextTime time.Time	// 下次调度时间
 }
+
+
 
 // 任务执行状态
 type JobExecuteInfo struct {
@@ -113,7 +125,7 @@ func UnpackJob(value []byte) (ret *ScheduleJob, err error) {
 // 从etcd的key中提取任务名
 // /cron/jobs/job10抹掉/cron/jobs/
 func ExtractJobName(jobKey string) (string) {
-	return strings.TrimPrefix(jobKey, JOB_SAVE_DIR)
+	return strings.TrimPrefix(jobKey, SCHE_JOB_SAVE_DIR)
 }
 
 // 从 /cron/killer/job10提取job10

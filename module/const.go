@@ -2,7 +2,15 @@ package module
 
 const (
 	// 任务保存目录
-	JOB_SAVE_DIR = "/cron/jobs/"
+	SCHE_JOB_SAVE_DIR = "/cron/jobs/sche/"
+
+	//普通任务保存目录
+
+	SIMP_JOB_SAVE_DIR = "/cron/jobs/simp/"
+
+	//所有任务
+
+	ALL_JOB_SAVE_DIR = "/cron/jobs"
 
 	// 任务强杀目录
 	JOB_KILLER_DIR = "/cron/killer/"

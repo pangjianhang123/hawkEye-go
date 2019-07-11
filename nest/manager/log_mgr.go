@@ -1,11 +1,11 @@
 package manager
 
 import (
+
+
 	"gopkg.in/mgo.v2"
 
-
 	"github.com/ricky1122alonefe/hawkEye-go/module"
-	"log"
 
 )
 
@@ -27,7 +27,7 @@ func InitLogMgr() (err error) {
 	// 建立mongodb连接
 
 	if session,err= mgo.Dial(G_config.MongodbUri);err!=nil{
-		log.Println(err.Error())
+		log.Critical(err.Error())
 	}
 	G_logMgr = &LogMgr{
 		session: session,

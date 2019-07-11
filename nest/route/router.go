@@ -13,6 +13,8 @@ func InitRouter() *gin.Engine {
 	r := gin.New()
 	url := ginSwagger.URL("http://localhost:8080/swagger/doc.json") //The url pointing to API definition
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, url))
+
+
 	r.POST("/api/v1/save",api.SaveJob)
 	r.POST("/api/v1/add",api.AddJob)
 	r.POST("/api/v1/delete",api.DeleteJob)

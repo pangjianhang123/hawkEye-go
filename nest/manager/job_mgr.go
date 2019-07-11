@@ -1,12 +1,28 @@
 package manager
 
 import (
-	"go.etcd.io/etcd/clientv3"
 	"time"
-	"github.com/ricky1122alonefe/hawkEye-go/module"
 	"encoding/json"
 	"context"
-	"go.etcd.io/etcd/mvcc/mvccpb"
+	"os"
+
+
+	//"go.etcd.io/etcd/mvcc/mvccpb"
+	"go.etcd.io/etcd/clientv3"
+	"github.com/apsdehal/go-logger"
+
+	"github.com/ricky1122alonefe/hawkEye-go/module"
+)
+
+const (
+	ALL = "all"
+	SCHEDULE = "schedule"
+	SIMPLE = "simple"
+)
+
+var (
+	log     *logger.Logger
+	log_err error
 )
 
 // 任务管理器
@@ -21,6 +37,9 @@ var (
 	G_jobMgr *JobMgr
 )
 
+func init() {
+	log, log_err = logger.New("test", 1, os.Stdout)
+}
 // 初始化管理器
 func InitJobMgr() (err error) {
 	var (
@@ -54,7 +73,7 @@ func InitJobMgr() (err error) {
 	return
 }
 
-// 保存任务
+// 保存cron任务
 func (jobMgr *JobMgr) SaveJob(job *module.ScheduleJob) (oldJob *module.ScheduleJob, err error) {
 	// 把任务保存到/cron/jobs/任务名 -> json
 	var (
@@ -65,7 +84,7 @@ func (jobMgr *JobMgr) SaveJob(job *module.ScheduleJob) (oldJob *module.ScheduleJ
 	)
 
 	// etcd的保存key
-	jobKey = module.JOB_SAVE_DIR +job.Name
+	jobKey = module.SCHE_JOB_SAVE_DIR +job.Name
 	// 任务信息json
 	if jobValue, err = json.Marshal(job); err != nil {
 		return
@@ -86,6 +105,36 @@ func (jobMgr *JobMgr) SaveJob(job *module.ScheduleJob) (oldJob *module.ScheduleJ
 	return
 }
 
+//普通脚本任务保存与添加
+func (jobMgr *JobMgr)SaveNormalJob(job *module.SimpleJob)(oldJob *module.SimpleJob,err error){
+	var (
+		jobKey string
+		jobValue []byte
+		putResp *clientv3.PutResponse
+		oldJobObj module.SimpleJob
+	)
+
+	// etcd的保存key
+	jobKey = module.SIMP_JOB_SAVE_DIR +job.Name
+	// 任务信息json
+	if jobValue, err = json.Marshal(job); err != nil {
+		return
+	}
+	// 保存到etcd
+	if putResp, err = jobMgr.kv.Put(context.TODO(), jobKey, string(jobValue), clientv3.WithPrevKV()); err != nil {
+		return
+	}
+	// 如果是更新, 那么返回旧值
+	if putResp.PrevKv != nil {
+		// 对旧值做一个反序列化
+		if err = json.Unmarshal(putResp.PrevKv.Value, &oldJobObj); err != nil {
+			err = nil
+			return
+		}
+		oldJob = &oldJobObj
+	}
+	return
+}
 // 删除任务
 func (jobMgr *JobMgr) DeleteJob(name string) (oldJob *module.ScheduleJob, err error) {
 	var (
@@ -95,7 +144,7 @@ func (jobMgr *JobMgr) DeleteJob(name string) (oldJob *module.ScheduleJob, err er
 	)
 
 	// etcd中保存任务的key
-	jobKey = module.JOB_SAVE_DIR + name
+	jobKey = module.SCHE_JOB_SAVE_DIR + name
 
 	// 从etcd中删除它
 	if delResp, err = jobMgr.kv.Delete(context.TODO(), jobKey, clientv3.WithPrevKV()); err != nil {
@@ -115,36 +164,101 @@ func (jobMgr *JobMgr) DeleteJob(name string) (oldJob *module.ScheduleJob, err er
 }
 
 // 列举任务
-func (jobMgr *JobMgr) ListJobs() (jobList []*module.ScheduleJob, err error) {
+func (jobMgr *JobMgr) ListJobs(jobType string) (jobscheList []*module.ScheduleJob,normalList []*module.SimpleJob, err error) {
 	var (
 		dirKey string
 		getResp *clientv3.GetResponse
-		kvPair *mvccpb.KeyValue
-		job *module.ScheduleJob
+		//kvPair *mvccpb.KeyValue
+		//job *module.ScheduleJob
+		jobList = make([]*module.ScheduleJob, 0)
+		simpleList = make([]*module.SimpleJob,0)
 	)
 
 	// 任务保存的目录
-	dirKey = module.JOB_SAVE_DIR
+
 
 	// 获取目录下所有任务信息
 	if getResp, err = jobMgr.kv.Get(context.TODO(), dirKey, clientv3.WithPrefix()); err != nil {
 		return
 	}
 
-	// 初始化数组空间
-	jobList = make([]*module.ScheduleJob, 0)
-	// len(jobList) == 0
+	switch jobType{
 
-	// 遍历所有任务, 进行反序列化
-	for _, kvPair = range getResp.Kvs {
-		job = &module.ScheduleJob{}
-		if err =json.Unmarshal(kvPair.Value, job); err != nil {
-			err = nil
-			continue
+	case ALL:
+
+		dirKey = module.ALL_JOB_SAVE_DIR
+		if getResp,err = GetJobsByTypes(dirKey,jobMgr);err!=nil{
+			log.Critical(err.Error())
 		}
-		jobList = append(jobList, job)
+		jobList,_,_  = GetJobs(getResp,SCHEDULE)
+		_,simpleList,_=GetJobs(getResp,SIMPLE)
+
+
+	case SCHEDULE:
+
+		dirKey = module.SCHE_JOB_SAVE_DIR
+
+		if getResp,err = GetJobsByTypes(dirKey,jobMgr);err!=nil{
+			log.Critical(err.Error())
+		}
+		jobList,simpleList,_  = GetJobs(getResp,jobType)
+
+	case SIMPLE:
+
+		dirKey = module.SIMP_JOB_SAVE_DIR
+
+		if getResp,err = GetJobsByTypes(dirKey,jobMgr);err!=nil{
+			log.Critical(err.Error())
+		}
+		jobList,simpleList,_  = GetJobs(getResp,jobType)
 	}
-	return
+
+
+	return jobList,simpleList,err
+}
+
+
+
+func GetJobsByTypes(jobType string,jbMgr *JobMgr)( *clientv3.GetResponse, error){
+	var getResp *clientv3.GetResponse
+	var err error
+	if getResp, err = jbMgr.kv.Get(context.TODO(), jobType, clientv3.WithPrefix()); err != nil {
+		return nil,err
+	}
+	return getResp,nil
+}
+
+func GetJobs(jbs *clientv3.GetResponse,jobType string)(jobscheList []*module.ScheduleJob,normalList []*module.SimpleJob, err error){
+
+	var (
+	jobList = make([]*module.ScheduleJob, 0)
+	simpleList = make([]*module.SimpleJob,0)
+	job *module.ScheduleJob
+	sJob *module.SimpleJob
+	)
+
+	switch jobType{
+
+	case SCHEDULE:
+		for _, kvPair := range jbs.Kvs {
+			job = &module.ScheduleJob{}
+			if err =json.Unmarshal(kvPair.Value, job); err != nil {
+				err = nil
+				continue
+			}
+			jobList = append(jobList, job)
+		}
+	case SIMPLE:
+		for _, kvPair := range jbs.Kvs {
+			sJob = &module.SimpleJob{}
+			if err =json.Unmarshal(kvPair.Value, job); err != nil {
+				err = nil
+				continue
+			}
+			simpleList = append(simpleList, sJob)
+		}
+	}
+	return jobList,simpleList,nil
 }
 
 // 杀死任务

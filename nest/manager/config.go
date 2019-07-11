@@ -1,23 +1,20 @@
 package manager
 
 import (
-"encoding/json"
-"io/ioutil"
+	"encoding/json"
+	"io/ioutil"
 )
 
-
 type EagleConfig struct {
-	ApiPort int	`json:"apiPort"`
-	ApiReadTimeout int	`json:"apiReadTimeout"`
-	ApiWriteTimeout int	`json:"apiWriteTimeout"`
-	EtcdEndpoints []string `json:"etcdEndpoints"`
-	EtcdDialTimeout int `json:"etcdDialTimeout"`
-	WebRoot string `json:"webroot"`
-	MongodbUri string `json:"mongodbUri"`
-	MongodbConnectTimeout int `json:"mongodbConnectTimeout"`
+	ApiPort               int      `json:"apiPort"`
+	ApiReadTimeout        int      `json:"apiReadTimeout"`
+	ApiWriteTimeout       int      `json:"apiWriteTimeout"`
+	EtcdEndpoints         []string `json:"etcdEndpoints"`
+	EtcdDialTimeout       int      `json:"etcdDialTimeout"`
+	WebRoot               string   `json:"webroot"`
+	MongodbUri            string   `json:"mongodbUri"`
+	MongodbConnectTimeout int      `json:"mongodbConnectTimeout"`
 }
-
-
 
 var (
 	// 单例
@@ -46,4 +43,3 @@ func InitConfig(filename string) (err error) {
 
 	return
 }
-
