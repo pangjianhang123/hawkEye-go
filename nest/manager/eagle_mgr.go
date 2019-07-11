@@ -1,18 +1,18 @@
 package manager
 
 import (
-"github.com/coreos/etcd/clientv3"
-"time"
-"context"
-"github.com/owenliang/crontab/common"
-"github.com/coreos/etcd/mvcc/mvccpb"
+	"context"
+	"go.etcd.io/etcd/mvcc/mvccpb"
+	"github.com/ricky1122alonefe/hawkEye-go/module"
+	"go.etcd.io/etcd/clientv3"
+	"time"
 )
 
 // /cron/workers/
 type EagleMgr struct {
 	client *clientv3.Client
-	kv clientv3.KV
-	lease clientv3.Lease
+	kv     clientv3.KV
+	lease  clientv3.Lease
 }
 
 var (
@@ -22,8 +22,8 @@ var (
 // 获取在线worker列表
 func (workerMgr *EagleMgr) ListWorkers() (workerArr []string, err error) {
 	var (
-		getResp *clientv3.GetResponse
-		kv *mvccpb.KeyValue
+		getResp  *clientv3.GetResponse
+		kv       *mvccpb.KeyValue
 		workerIP string
 	)
 
@@ -31,14 +31,14 @@ func (workerMgr *EagleMgr) ListWorkers() (workerArr []string, err error) {
 	workerArr = make([]string, 0)
 
 	// 获取目录下所有Kv
-	if getResp, err = workerMgr.kv.Get(context.TODO(), common.JOB_WORKER_DIR, clientv3.WithPrefix()); err != nil {
+	if getResp, err = workerMgr.kv.Get(context.TODO(), module.JOB_WORKER_DIR, clientv3.WithPrefix()); err != nil {
 		return
 	}
 
 	// 解析每个节点的IP
 	for _, kv = range getResp.Kvs {
 
-		workerIP = common.ExtractWorkerIP(string(kv.Key))
+		workerIP = module.ExtractWorkerIP(string(kv.Key))
 		workerArr = append(workerArr, workerIP)
 	}
 	return
@@ -48,13 +48,13 @@ func InitWorkerMgr() (err error) {
 	var (
 		config clientv3.Config
 		client *clientv3.Client
-		kv clientv3.KV
-		lease clientv3.Lease
+		kv     clientv3.KV
+		lease  clientv3.Lease
 	)
 
 	// 初始化配置
 	config = clientv3.Config{
-		Endpoints: G_config.EtcdEndpoints, // 集群地址
+		Endpoints:   G_config.EtcdEndpoints,                                     // 集群地址
 		DialTimeout: time.Duration(G_config.EtcdDialTimeout) * time.Millisecond, // 连接超时
 	}
 
@@ -68,9 +68,9 @@ func InitWorkerMgr() (err error) {
 	lease = clientv3.NewLease(client)
 
 	G_workerMgr = &EagleMgr{
-		client :client,
-		kv: kv,
-		lease: lease,
+		client: client,
+		kv:     kv,
+		lease:  lease,
 	}
 	return
 }

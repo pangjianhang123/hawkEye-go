@@ -40,8 +40,6 @@ func InitLogMgr() (err error) {
 func (logMgr *LogMgr) ListLog(name string, skip int, limit int) (logArr []*module.JobLog, err error){
 	var (
 		filter *module.JobLogFilter
-		logSort *module.SortLogByStartTime
-		jobLog *module.JobLog
 	)
 
 	// len(logArr)
@@ -51,7 +49,6 @@ func (logMgr *LogMgr) ListLog(name string, skip int, limit int) (logArr []*modul
 	filter = &module.JobLogFilter{JobName: name}
 
 	// 按照任务开始时间倒排
-	logSort = &module.SortLogByStartTime{SortOrder: -1}
 
 	if err=logMgr.logCollection.Find(filter).All(&logArr);err!=nil{
 		return

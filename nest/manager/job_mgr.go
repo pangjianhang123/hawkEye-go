@@ -1,12 +1,12 @@
 package manager
 
 import (
-	"github.com/coreos/etcd/clientv3"
+	"go.etcd.io/etcd/clientv3"
 	"time"
 	"github.com/ricky1122alonefe/hawkEye-go/module"
 	"encoding/json"
 	"context"
-	"github.com/coreos/etcd/mvcc/mvccpb"
+	"go.etcd.io/etcd/mvcc/mvccpb"
 )
 
 // 任务管理器
