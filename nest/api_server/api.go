@@ -19,12 +19,9 @@ var (
 	log_err error
 )
 
-
-
 func init() {
 	log, log_err = logger.New("test", 1, os.Stdout)
 }
-
 
 type JobMgr struct {
 	client *clientv3.Client
@@ -45,9 +42,9 @@ func SaveJob(ctx *gin.Context) {
 
 	if err = json.Unmarshal(reqBody, req); err != nil {
 		log.Critical(err.Error())
-		resp.Code =http.StatusBadRequest
+		resp.Code = http.StatusBadRequest
 		resp.Msg = err.Error()
-		ctx.JSON(400,resp)
+		ctx.JSON(400, resp)
 		return
 	}
 
@@ -58,9 +55,9 @@ func SaveJob(ctx *gin.Context) {
 	if oldJob, err = manager.G_jobMgr.SaveJob(&job); err != nil {
 		log.Critical(err.Error())
 		log.Critical(err.Error())
-		resp.Code =http.StatusBadRequest
+		resp.Code = http.StatusBadRequest
 		resp.Msg = err.Error()
-		ctx.JSON(400,resp)
+		ctx.JSON(400, resp)
 		return
 	}
 
@@ -71,7 +68,7 @@ func SaveJob(ctx *gin.Context) {
 	ctx.JSON(200, resp)
 }
 
-func SaveSimpleJob(ctx *gin.Context){
+func SaveSimpleJob(ctx *gin.Context) {
 	var (
 		err    error
 		job    module.SimpleJob
@@ -84,9 +81,9 @@ func SaveSimpleJob(ctx *gin.Context){
 
 	if err = json.Unmarshal(reqBody, req); err != nil {
 		log.Critical(err.Error())
-		resp.Code =http.StatusBadRequest
+		resp.Code = http.StatusBadRequest
 		resp.Msg = err.Error()
-		ctx.JSON(400,resp)
+		ctx.JSON(400, resp)
 		return
 	}
 
@@ -97,9 +94,9 @@ func SaveSimpleJob(ctx *gin.Context){
 	if oldJob, err = manager.G_jobMgr.SaveNormalJob(&job); err != nil {
 		log.Critical(err.Error())
 		log.Critical(err.Error())
-		resp.Code =http.StatusBadRequest
+		resp.Code = http.StatusBadRequest
 		resp.Msg = err.Error()
-		ctx.JSON(400,resp)
+		ctx.JSON(400, resp)
 		return
 	}
 
@@ -127,7 +124,7 @@ func DeleteJob(ctx *gin.Context) {
 		log.Critical(err.Error())
 		resp.Code = http.StatusBadRequest
 		resp.Msg = err.Error()
-		ctx.JSON(400,resp)
+		ctx.JSON(400, resp)
 		return
 	}
 
@@ -137,7 +134,6 @@ func DeleteJob(ctx *gin.Context) {
 		resp.Msg = err.Error()
 		ctx.JSON(400, resp)
 	}
-
 
 	resp.Code = http.StatusOK
 	resp.Msg = "success"
@@ -170,16 +166,15 @@ func KillJob(ctx *gin.Context) {
 
 func GetEyasList(ctx *gin.Context) {
 	var (
-		jobList []*module.ScheduleJob
+		jobList    []*module.ScheduleJob
 		simpleList []*module.SimpleJob
-		resp    module.JobListResponse
-		err     error
+		resp       module.JobListResponse
+		err        error
 	)
 
-
-	jobType :=ctx.Param("type")
+	jobType := ctx.Param("type")
 	// 获取任务列表
-	if jobList,simpleList, err = manager.G_jobMgr.ListJobs(jobType); err != nil {
+	if jobList, simpleList, err = manager.G_jobMgr.ListJobs(jobType); err != nil {
 		resp.Code = http.StatusOK
 		resp.Msg = err.Error()
 		ctx.JSON(400, resp)
